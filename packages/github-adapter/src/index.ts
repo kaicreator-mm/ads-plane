@@ -38,7 +38,7 @@ export class GitHubReadOnlyClient {
   private readonly fetchImpl: typeof fetch;
   private readonly apiBase: string;
   private readonly apiVersion: string;
-  private readonly token?: string;
+  private readonly token: string | undefined;
   private readonly userAgent: string;
 
   constructor(options: GitHubReaderOptions = {}) {
@@ -96,7 +96,7 @@ export class GitHubReadOnlyClient {
       title: issue.title,
       body: issue.body ?? '',
       state: issue.state,
-      stateReason: issue.state_reason,
+      ...(issue.state_reason !== undefined ? {stateReason: issue.state_reason} : {}),
       labels: issue.labels.map((label) => typeof label === 'string' ? label : label.name ?? '').filter(Boolean),
       assignees: (issue.assignees ?? []).map((a) => a.login),
       milestone: issue.milestone?.title ?? null,
@@ -141,7 +141,7 @@ export class GitHubReadOnlyClient {
       name: run.name ?? 'workflow',
       event: run.event,
       status: run.status,
-      conclusion: run.conclusion,
+      ...(run.conclusion !== undefined ? {conclusion: run.conclusion} : {}),
       headSha: run.head_sha,
       htmlUrl: run.html_url,
       updatedAt: run.updated_at
@@ -154,12 +154,14 @@ export class GitHubReadOnlyClient {
     }
 
     const events = comments.map(parseAgentEvent).filter((event): event is NonNullable<typeof event> => Boolean(event));
+    const repositoryVersion = artifacts.find((a) => a.path === 'VERSION')?.content.trim();
+    const standardVersion = artifacts.find((a) => a.path === '.dev-standard/VERSION')?.content.trim();
     return {
       repository,
       defaultBranch: repoFact.default_branch,
       defaultBranchSha: branch.commit.sha,
-      repositoryVersion: artifacts.find((a) => a.path === 'VERSION')?.content.trim(),
-      standardVersion: artifacts.find((a) => a.path === '.dev-standard/VERSION')?.content.trim(),
+      ...(repositoryVersion !== undefined ? {repositoryVersion} : {}),
+      ...(standardVersion !== undefined ? {standardVersion} : {}),
       issues,
       dependencies,
       pullRequests,
