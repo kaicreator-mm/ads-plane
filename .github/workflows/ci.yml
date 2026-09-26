@@ -5,7 +5,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -16,13 +16,18 @@ jobs:
         with:
           node-version: '22'
       - run: npm install
-      - name: Upload generated lockfile bootstrap artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-lock-bootstrap
-          path: package-lock.json
-          if-no-files-found: error
-          retention-days: 1
+      - name: Bootstrap package-lock on version branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/version/v0.0.1'
+        run: |
+          if git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+            echo 'package-lock.json is already tracked'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'chore: lock v0.0.1 npm dependencies'
+          git push origin HEAD:version/v0.0.1
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run check
       - name: Verify GitHub runtime adapter is GET-only
