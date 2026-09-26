@@ -16,12 +16,13 @@ jobs:
         with:
           node-version: '22'
       - run: npm install
-      - name: Emit generated lockfile for bootstrap
-        run: |
-          echo 'ADS_PLANE_LOCKFILE_B64_BEGIN'
-          base64 -w0 package-lock.json
-          echo
-          echo 'ADS_PLANE_LOCKFILE_B64_END'
+      - name: Upload generated lockfile bootstrap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock-bootstrap
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run check
       - name: Verify GitHub runtime adapter is GET-only
