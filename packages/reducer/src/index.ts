@@ -191,6 +191,13 @@ export function reduceRepositoryFacts(facts: RepositoryFacts, versionHint?: stri
     const reviewSatisfied = reviewPolicy === 'not-required' || review.state === 'PASS' || (reviewPolicy === 'recommended' && review.state === 'NOT_RUN');
     const ciSatisfied = ci.state === 'PASS' || ci.state === 'NOT_APPLICABLE';
     const dispatch = dispatchFromEvents(events);
+    const pullRequest: WorkItemSnapshot['pullRequest'] = pr ? {
+      number: pr.number,
+      state: pr.merged ? 'merged' : pr.state,
+      headSha: pr.headSha,
+      baseSha: pr.baseSha,
+      htmlUrl: pr.htmlUrl
+    } : undefined;
     return {
       taskId: normalizeTaskId(issue.title, issue.number),
       issueNumber: issue.number,
@@ -201,7 +208,7 @@ export function reduceRepositoryFacts(facts: RepositoryFacts, versionHint?: stri
       risk: normalizeRisk(issue),
       blockedBy: dep.blockedBy,
       blockingDependencies,
-      ...(pr ? { pullRequest: { number: pr.number, state: pr.merged ? 'merged' : pr.state, headSha: pr.headSha, baseSha: pr.baseSha, htmlUrl: pr.htmlUrl } } : {}),
+      ...(pullRequest ? { pullRequest } : {}),
       ...(dispatch ? { dispatch } : {}),
       review,
       validation,
