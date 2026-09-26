@@ -1,4 +1,9 @@
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+// apps/server/{src,dist} -> apps/web/dist, independent of process.cwd()
+const defaultWebDist = resolve(moduleDir, '../../web/dist');
 
 export interface RuntimeConfig {
   host: string;
@@ -31,6 +36,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig 
     repositories: parseRepositories(env.ADS_REPOSITORIES),
     syncIntervalSeconds: Math.max(0, Number(env.ADS_SYNC_INTERVAL_SECONDS ?? 300)),
     demo: env.ADS_DEMO === '1',
-    webDist: resolve(env.ADS_WEB_DIST ?? 'apps/web/dist')
+    webDist: env.ADS_WEB_DIST ? resolve(env.ADS_WEB_DIST) : defaultWebDist
   };
 }

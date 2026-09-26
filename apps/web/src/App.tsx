@@ -82,10 +82,14 @@ function Dag({snapshot, onSelect}: {snapshot: VersionSnapshot; onSelect: (item: 
       style: {width: 205, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', padding: 0}
     };
   });
+  const laneLabelNodes: Node[] = snapshot.lanes.map((lane, i) => ({
+    id: `lane-${lane.id}`, position: {x: -180, y: i * 150 + 44}, draggable: false, selectable: false, connectable: false,
+    data: {label: <div className="dag-lane-label">{lane.id}</div>}
+  }));
   const edges: Edge[] = snapshot.workItems.flatMap((item) => item.blockedBy.filter((dep) => issueToTask.has(dep)).map((dep) => ({
     id: `${dep}-${item.issueNumber}`, source: String(dep), target: String(item.issueNumber), markerEnd: {type: MarkerType.ArrowClosed}, animated: item.blockingDependencies.includes(dep)
   })));
-  return <section className="panel dag-panel"><div className="panel-title">Task DAG · lanes</div><div className="dag-canvas"><ReactFlow nodes={nodes} edges={edges} fitView onNodeClick={(_, node) => {const item = issueToTask.get(Number(node.id)); if (item) onSelect(item);}}><Background /><Controls /></ReactFlow></div></section>;
+  return <section className="panel dag-panel"><div className="panel-title">Task DAG · lanes</div><div className="dag-canvas"><ReactFlow nodes={[...nodes, ...laneLabelNodes]} edges={edges} fitView onNodeClick={(_, node) => {const item = issueToTask.get(Number(node.id)); if (item) onSelect(item);}}><Background /><Controls /></ReactFlow></div></section>;
 }
 
 function Activity({snapshot}: {snapshot: VersionSnapshot}) {
@@ -144,7 +148,9 @@ export function App() {
     finally { setLoading(false); }
   };
 
-  const subtitle = useMemo(() => snapshot ? `${snapshot.version} · ADS ${snapshot.standardVersion ?? 'unknown'} · ${new Date(snapshot.generatedAt).toLocaleString()}` : '', [snapshot]);
+  const subtitle = useMemo(() => snapshot
+    ? [snapshot.version, snapshot.standardVersion ? `ADS ${snapshot.standardVersion}` : null, new Date(snapshot.generatedAt).toLocaleString()].filter(Boolean).join(' · ')
+    : '', [snapshot]);
 
   return <div className="app-shell">
     <header className="topbar"><div><div className="brand">ADS Plane</div><div className="top-sub">AI Development Standard observer</div></div><div className="top-actions"><select value={selectedRepo} onChange={(e)=>setSelectedRepo(e.target.value)}>{projects.map((p)=><option key={p.repository}>{p.repository}</option>)}</select><button onClick={()=>void sync()} disabled={!selectedRepo || loading}>{loading ? 'Syncing…' : 'Sync now'}</button></div></header>
