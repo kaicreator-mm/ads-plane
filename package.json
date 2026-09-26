@@ -1,0 +1,27 @@
+{
+  "name": "ads-plane",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Read-only observer and control-plane foundation for AI Development Standard projects",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:packages": "npm run build -w @ads-plane/contracts && npm run build -w @ads-plane/reducer && npm run build -w @ads-plane/github-adapter && npm run build -w @ads-plane/storage",
+    "build": "npm run build:packages && npm run build -w @ads-plane/server && npm run build -w @ads-plane/web",
+    "dev": "npm run dev -w @ads-plane/server",
+    "dev:web": "npm run dev -w @ads-plane/web",
+    "test": "vitest run",
+    "typecheck": "npm run typecheck -w @ads-plane/contracts && npm run typecheck -w @ads-plane/reducer && npm run typecheck -w @ads-plane/github-adapter && npm run typecheck -w @ads-plane/storage && npm run typecheck -w @ads-plane/server && npm run typecheck -w @ads-plane/web",
+    "check": "npm run build && npm test && npm run typecheck"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

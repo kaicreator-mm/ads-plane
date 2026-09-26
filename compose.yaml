@@ -1,0 +1,15 @@
+services:
+  ads-plane:
+    build: .
+    ports:
+      - "4310:4310"
+    environment:
+      ADS_DEMO: "1"
+      ADS_HOST: "0.0.0.0"
+      ADS_PORT: "4310"
+      ADS_DATA_DIR: "/app/.data"
+      ADS_SYNC_INTERVAL_SECONDS: "300"
+    volumes:
+      - ads-plane-data:/app/.data
+volumes:
+  ads-plane-data:
