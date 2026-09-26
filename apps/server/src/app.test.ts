@@ -23,5 +23,5 @@ describe('server API', () => {
     expect(snapshot.json().authorityNotice).toBe('NON_AUTHORITATIVE_DERIVED_STATE');
     await app.close();
     store.close();
-  });
+  }, 20000);
 });

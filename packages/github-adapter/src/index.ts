@@ -10,6 +10,7 @@ export interface GitHubReaderOptions {
   apiVersion?: string;
   fetchImpl?: typeof fetch;
   userAgent?: string;
+  maxConcurrency?: number;
 }
 
 interface GitHubLabel { name?: string }
@@ -34,12 +35,28 @@ function decodeContent(payload: GitHubContent): string {
   return payload.content;
 }
 
+async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  const workers = Array.from({length: workerCount}, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      const item = items[index];
+      if (item !== undefined) results[index] = await fn(item);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export class GitHubReadOnlyClient {
   private readonly fetchImpl: typeof fetch;
   private readonly apiBase: string;
   private readonly apiVersion: string;
   private readonly token: string | undefined;
   private readonly userAgent: string;
+  private readonly maxConcurrency: number;
 
   constructor(options: GitHubReaderOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -47,6 +64,7 @@ export class GitHubReadOnlyClient {
     this.apiVersion = options.apiVersion ?? '2026-03-10';
     this.token = options.token;
     this.userAgent = options.userAgent ?? 'ads-plane/0.0.1';
+    this.maxConcurrency = Math.max(1, options.maxConcurrency ?? 6);
   }
 
   private async request<T>(path: string): Promise<T> {
@@ -106,7 +124,7 @@ export class GitHubReadOnlyClient {
 
     const dependencies: DependencyFact[] = [];
     const comments: CommentFact[] = [];
-    for (const issue of issues) {
+    await mapLimit(issues, this.maxConcurrency, async (issue) => {
       const blockedBy = await this.optional<GitHubIssue[]>(`/repos/${owner}/${repo}/issues/${issue.number}/dependencies/blocked_by?per_page=100`);
       if (blockedBy) dependencies.push({issueNumber: issue.number, blockedBy: blockedBy.map((v) => v.number), source: 'native'});
       const issueComments = await this.paged<GitHubComment>(`/repos/${owner}/${repo}/issues/${issue.number}/comments`);
@@ -119,7 +137,7 @@ export class GitHubReadOnlyClient {
         updatedAt: comment.updated_at,
         author: comment.user?.login ?? 'unknown'
       })));
-    }
+    });
 
     const rawPulls = await this.paged<GitHubPull>(`/repos/${owner}/${repo}/pulls?state=all`);
     const pullRequests = rawPulls.map<PullRequestFact>((pr) => ({

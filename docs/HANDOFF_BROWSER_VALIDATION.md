@@ -11,7 +11,7 @@ Validate the exact `version/v0.0.1` HEAD recorded in the tracking Issue before s
 ```bash
 npm install
 npm run check
-ADS_PLANE_DEMO=true npm run dev
+ADS_DEMO=1 npm run dev
 npm run dev:web
 ```
 

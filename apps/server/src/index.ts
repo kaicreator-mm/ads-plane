@@ -14,15 +14,17 @@ if (config.demo) store.save(demoSnapshot());
 const client = new GitHubReadOnlyClient(config.githubToken ? {token: config.githubToken} : {});
 const service = new ObserverService(client, store);
 
-if (!config.demo && config.repositories.length > 0) {
-  const results = await service.syncAll();
-  for (const result of results) if (!result.ok) console.error(`[sync] ${result.repository}: ${result.error}`);
-}
-
-if (!config.demo && config.syncIntervalSeconds > 0) {
-  const timer = setInterval(() => void service.syncAll(), config.syncIntervalSeconds * 1000);
-  timer.unref();
-}
-
 const app = await buildApp(config, service);
 await app.listen({host: config.host, port: config.port});
+
+const logSyncResults = (results: Array<{repository: string; ok: boolean; error?: string}>) => {
+  for (const result of results) if (!result.ok) console.error(`[sync] ${result.repository}: ${result.error}`);
+};
+const logSyncFailure = (error: unknown) => console.error(`[sync] ${error instanceof Error ? error.message : String(error)}`);
+
+if (!config.demo && config.repositories.length > 0) void service.syncAll().then(logSyncResults, logSyncFailure);
+
+if (!config.demo && config.syncIntervalSeconds > 0) {
+  const timer = setInterval(() => void service.syncAll().then(logSyncResults, logSyncFailure), config.syncIntervalSeconds * 1000);
+  timer.unref();
+}
