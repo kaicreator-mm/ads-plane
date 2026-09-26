@@ -1,0 +1,33 @@
+{
+  "repository": "fixture/ads-project",
+  "defaultBranch": "main",
+  "defaultBranchSha": "main-001",
+  "repositoryVersion": "0.0.1",
+  "standardVersion": "4.0.0",
+  "issues": [
+    {"number":101,"id":101,"title":"T-001 — contracts","body":"Lane: contract\nDepends On: —\nReview Policy: required\nRisk: high","state":"closed","labels":[],"assignees":[],"htmlUrl":"https://example/101","updatedAt":"2026-09-26T00:00:00Z"},
+    {"number":102,"id":102,"title":"T-002 — reducer","body":"Lane: core\nDepends On: #101\nReview Policy: required\nRisk: high\nPR #201","state":"open","labels":[],"assignees":[],"htmlUrl":"https://example/102","updatedAt":"2026-09-26T00:01:00Z"},
+    {"number":103,"id":103,"title":"T-003 — adapter","body":"Lane: adapter\nDepends On: #101\nReview Policy: recommended\nRisk: medium","state":"open","labels":["state:claimed"],"assignees":[],"htmlUrl":"https://example/103","updatedAt":"2026-09-26T00:02:00Z"},
+    {"number":104,"id":104,"title":"T-004 — validation","body":"Lane: validation\nDepends On: #102, #103\nReview Policy: not-required\nRisk: medium","state":"open","labels":[],"assignees":[],"htmlUrl":"https://example/104","updatedAt":"2026-09-26T00:03:00Z"}
+  ],
+  "dependencies": [
+    {"issueNumber":101,"blockedBy":[],"source":"native"},
+    {"issueNumber":102,"blockedBy":[101],"source":"native"},
+    {"issueNumber":103,"blockedBy":[101],"source":"native"},
+    {"issueNumber":104,"blockedBy":[102,103],"source":"native"}
+  ],
+  "pullRequests": [
+    {"number":201,"title":"T-002 reducer","state":"open","merged":false,"headSha":"head-new","baseSha":"main-001","headRef":"task/t002","baseRef":"main","htmlUrl":"https://example/pr201","updatedAt":"2026-09-26T00:04:00Z"}
+  ],
+  "workflowRuns": [
+    {"id":301,"name":"ci","event":"pull_request","status":"completed","conclusion":"success","headSha":"head-new","htmlUrl":"https://example/run301","updatedAt":"2026-09-26T00:05:00Z"}
+  ],
+  "comments": [
+    {"id":401,"issueNumber":102,"body":"schema: ai-dev/event:v2\nevent: REVIEW_RESULT\nstatus: PASS\nhead_sha: head-old\noccurred_at: 2026-09-26T00:05:00Z","htmlUrl":"https://example/c401","createdAt":"2026-09-26T00:05:00Z","updatedAt":"2026-09-26T00:05:00Z","author":"reviewer"},
+    {"id":402,"issueNumber":102,"body":"schema: ai-dev/event:v2\nevent: VALIDATION_RESULT\nstatus: PASS\nhead_sha: head-new\noccurred_at: 2026-09-26T00:06:00Z","htmlUrl":"https://example/c402","createdAt":"2026-09-26T00:06:00Z","updatedAt":"2026-09-26T00:06:00Z","author":"validator"},
+    {"id":403,"issueNumber":103,"body":"schema: ai-dev/event:v2\nevent: DISPATCH_CLAIMED\ndispatch_id: D-103\noperator_id: worker-a\nactor_role: builder\nstatus: RUNNING\noccurred_at: 2026-09-26T00:07:00Z","htmlUrl":"https://example/c403","createdAt":"2026-09-26T00:07:00Z","updatedAt":"2026-09-26T00:07:00Z","author":"scheduler"}
+  ],
+  "events": [],
+  "artifacts": [],
+  "collectedAt": "2026-09-26T00:08:00Z"
+}
