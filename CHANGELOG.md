@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Account repository discovery with standard-adoption marking (#23):
+  - After configuring a GitHub token, Settings can scan every repository visible to the account (`POST /api/discovery/scan`) and classify each as supported (ai-development-standard ≥ 3.4.0), adopted-but-unsupported, or not adopted, with private/fork flags and already-monitored marks; per-repo Monitor action and bulk Monitor-all-supported.
+  - Version pin parsing now handles `version=`, `version:`, leading-semver, and prose pin shapes.
+- Compatibility: `blocked by:` markdown-list dependency variant (v3.4.0 frozen-DAG projection issues) now reduces — domain-simulator went from 0 to 43 dependency edges (#23, closes the P3 from #20).
 - Multi-project monitoring overview (#21):
   - New all-projects view: cards per configured repository with progress, candidate/release badges, sync status, last-sync time, per-repo sync and one-click navigation; Sync-all action; auto-refresh while any repository is syncing.
   - Repository selector gains an "All projects" entry; multi-project deployments land on the overview, single-project deployments still land directly on the project.

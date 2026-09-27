@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GitHubReadOnlyClient } from './index.js';
+import { GitHubReadOnlyClient, MIN_SUPPORTED_STANDARD, compareStandardVersion } from './index.js';
 
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {status, headers: {'content-type': 'application/json'}});
@@ -81,5 +81,40 @@ describe('GitHubReadOnlyClient', () => {
     expect(facts.issues).toHaveLength(8);
     expect(facts.comments).toEqual([]);
     expect(peak).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('account discovery', () => {
+  it('lists account repositories and probes standard adoption', async () => {
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith('/user')) return response({login: 'kaicreator-mm'});
+      if (url.includes('/user/repos')) return response([
+        {full_name: 'kaicreator-mm/dac', private: true, fork: false, updated_at: 'now'},
+        {full_name: 'kaicreator-mm/plain', private: false, fork: false, updated_at: 'now'},
+        {full_name: 'kaicreator-mm/legacy', private: false, fork: true, updated_at: 'now'}
+      ]);
+      if (url.includes('/repos/kaicreator-mm/dac/contents/.dev-standard/VERSION')) {
+        return response({type: 'file', name: 'VERSION', path: '.dev-standard/VERSION', sha: 's1', content: Buffer.from('repository=x\nversion=3.4.0\nrevision=y').toString('base64'), encoding: 'base64', html_url: null});
+      }
+      if (url.includes('/contents/.dev-standard/VERSION')) return response({message: 'not found'}, 404);
+      if (url.includes('/repos/kaicreator-mm/legacy/contents/.dev-standard/VERSION')) {
+        return response({type: 'file', name: 'VERSION', path: '.dev-standard/VERSION', sha: 's2', content: Buffer.from('version: 2.0.0\nrevision: deadbee').toString('base64'), encoding: 'base64', html_url: null});
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    };
+    const scan = await new GitHubReadOnlyClient({fetchImpl, maxConcurrency: 2}).scanAccountStandards();
+    expect(scan.account).toBe('kaicreator-mm');
+    expect(scan.repositories.map((r) => r.repository)).toEqual(['kaicreator-mm/dac', 'kaicreator-mm/legacy', 'kaicreator-mm/plain']);
+    expect(scan.repositories.find((r) => r.repository === 'kaicreator-mm/dac')?.standardVersion).toBe('3.4.0');
+    expect(scan.repositories.find((r) => r.repository === 'kaicreator-mm/plain')?.standardVersion).toBeUndefined();
+    expect(scan.repositories.find((r) => r.repository === 'kaicreator-mm/legacy')?.fork).toBe(true);
+  });
+
+  it('compares v-prefixed standard versions', () => {
+    expect(compareStandardVersion('v4.0.0', MIN_SUPPORTED_STANDARD)).toBeGreaterThan(0);
+    expect(compareStandardVersion('3.4.0', MIN_SUPPORTED_STANDARD)).toBe(0);
+    expect(compareStandardVersion('3.3.9', MIN_SUPPORTED_STANDARD)).toBeLessThan(0);
+    expect(compareStandardVersion('1.2.1', MIN_SUPPORTED_STANDARD)).toBeLessThan(0);
   });
 });

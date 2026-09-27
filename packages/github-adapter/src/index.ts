@@ -13,6 +13,38 @@ export interface GitHubReaderOptions {
   maxConcurrency?: number;
 }
 
+/** Lowest ai-development-standard version this ADS Plane release can monitor. */
+export const MIN_SUPPORTED_STANDARD = '3.4.0';
+
+/** Compares `v`-prefixed dotted versions; returns <0/0/>0 like a comparator. */
+export function compareStandardVersion(version: string, baseline: string): number {
+  const parse = (value: string) => value.trim().replace(/^v/i, '').split('.').map((part) => Number.parseInt(part, 10) || 0);
+  const [a, b] = [parse(version), parse(baseline)];
+  const width = Math.max(a.length, b.length);
+  for (let i = 0; i < width; i += 1) {
+    const delta = (a[i] ?? 0) - (b[i] ?? 0);
+    if (delta !== 0) return delta;
+  }
+  return 0;
+}
+
+export interface AccountRepositoryStatus {
+  repository: string;
+  /** Parsed from `.dev-standard/VERSION` when the repository adopts the standard. */
+  standardVersion?: string;
+  private: boolean;
+  fork: boolean;
+  updatedAt: string;
+}
+
+export interface AccountScan {
+  account: string;
+  scannedAt: string;
+  repositories: AccountRepositoryStatus[];
+}
+
+interface GitHubAccountRepo { full_name: string; private: boolean; fork: boolean; updated_at: string }
+
 interface GitHubLabel { name?: string }
 interface GitHubIssue {
   id: number; number: number; title: string; body?: string | null; state: 'open'|'closed';
@@ -36,15 +68,21 @@ function decodeContent(payload: GitHubContent): string {
 }
 
 /**
- * Version artifacts come in two shapes: a bare semver line (`4.0.0`) or a
- * key=value pin block (`repository=...`\n`version=3.4.0`\n`revision=...`).
- * Extract the `version=` value when present, otherwise use the whole content.
+ * Version artifacts come in three shapes: a bare semver line (`4.0.0`), a
+ * key=value pin block (`repository=...`\n`version=3.4.0`), or a colon-style
+ * block (`version: 3.4.0`\n`revision: ...`). Extract the `version` key when
+ * present, otherwise use the whole content.
  */
 function parseVersionContent(content: string): string | undefined {
   const trimmed = content.trim();
   if (!trimmed) return undefined;
-  const versionField = trimmed.match(/^\s*version\s*=\s*(\S+)/im)?.[1];
-  return versionField ?? trimmed;
+  const versionField = trimmed.match(/^\s*version\s*[=:]\s*(\S+)/im)?.[1];
+  if (versionField) return versionField;
+  // leading semver with trailing prose, e.g. `2.0.0 revision: 0446f04…`
+  const leading = trimmed.match(/^\s*(v?\d+(?:\.\d+){1,3}(?:[-+][\w.-]+)?)/);
+  if (leading) return leading[1];
+  // prose pin, e.g. `AI Development Standard v3.1.0 commit=…`
+  return trimmed.match(/\bv?\d+\.\d+\.\d+(?:[-+][\w.-]+)?\b/)?.[0] ?? trimmed;
 }
 
 async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -214,5 +252,28 @@ export class GitHubReadOnlyClient {
       artifacts,
       collectedAt: new Date().toISOString()
     };
+  }
+
+  /**
+   * Discovers every repository visible to the configured token account and probes
+   * each for `.dev-standard/VERSION`. Read-only: one repo list plus one optional
+   * contents GET per repository, bounded by maxConcurrency.
+   */
+  async scanAccountStandards(): Promise<AccountScan> {
+    const user = await this.request<{login: string}>('/user');
+    const repos = await this.paged<GitHubAccountRepo>('/user/repos?sort=pushed');
+    const repositories = await mapLimit(repos, this.maxConcurrency, async (repo) => {
+      const payload = await this.optional<GitHubContent>(`/repos/${repo.full_name}/contents/.dev-standard/VERSION`);
+      const standardVersion = payload?.content ? parseVersionContent(decodeContent(payload)) : undefined;
+      return {
+        repository: repo.full_name,
+        ...(standardVersion !== undefined ? {standardVersion} : {}),
+        private: repo.private,
+        fork: repo.fork,
+        updatedAt: repo.updated_at
+      } satisfies AccountRepositoryStatus;
+    });
+    repositories.sort((a, b) => a.repository.localeCompare(b.repository));
+    return { account: user.login, scannedAt: new Date().toISOString(), repositories };
   }
 }

@@ -91,6 +91,18 @@ const en = {
   openProject: 'Open',
   noProjects: 'No repositories configured',
   noProjectsHint: 'Add repositories in settings to start monitoring.',
+  accountRepos: 'Account repositories',
+  scanAccount: 'Scan account repositories',
+  scanning: 'Scanning…',
+  needTokenFirst: 'Configure a GitHub token first.',
+  stdSupported: 'Supported',
+  stdUnsupported: 'Unsupported version',
+  stdNotAdopted: 'No standard',
+  monitoredChip: 'Monitored',
+  monitor: 'Monitor',
+  monitorAllSupported: 'Monitor all supported',
+  scanDoneHint: 'Found {count} repositories; {supported} supported.',
+  scannedAt: 'Scanned',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -184,6 +196,18 @@ const zh: Record<MessageKey, string> = {
   openProject: '查看',
   noProjects: '尚未配置仓库',
   noProjectsHint: '在设置中添加仓库以开始监控。',
+  accountRepos: '账号仓库',
+  scanAccount: '扫描账号仓库',
+  scanning: '扫描中…',
+  needTokenFirst: '请先配置 GitHub 令牌。',
+  stdSupported: '支持监控',
+  stdUnsupported: '版本不支持',
+  stdNotAdopted: '未采用标准',
+  monitoredChip: '已监控',
+  monitor: '监控',
+  monitorAllSupported: '监控全部支持项目',
+  scanDoneHint: '发现 {count} 个仓库，{supported} 个支持监控。',
+  scannedAt: '扫描时间',
 };
 
 export const messages: Record<Lang, Record<MessageKey, string>> = {en, zh};

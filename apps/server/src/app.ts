@@ -2,11 +2,30 @@ import { existsSync } from 'node:fs';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import staticPlugin from '@fastify/static';
-import { GitHubReadOnlyClient } from '@ads-plane/github-adapter';
+import { GitHubReadOnlyClient, MIN_SUPPORTED_STANDARD, compareStandardVersion, type AccountScan } from '@ads-plane/github-adapter';
 import type { RuntimeConfig } from './config.js';
 import type { ObserverService } from './service.js';
 
 export interface SyncStatus { state: 'syncing' | 'ok' | 'error'; message?: string; at: string }
+
+export interface DiscoveryRepository {
+  repository: string;
+  standardVersion?: string;
+  adopted: boolean;
+  /** Adopted and the pinned standard version is supported by this ADS Plane release. */
+  monitorable: boolean;
+  /** Already registered for monitoring. */
+  monitored: boolean;
+  private: boolean;
+  fork: boolean;
+  updatedAt: string;
+}
+
+export interface DiscoveryView {
+  account?: string;
+  scannedAt?: string;
+  repositories: DiscoveryRepository[];
+}
 
 function maskToken(token: string): string {
   if (token.length <= 8) return '••••';
@@ -31,6 +50,24 @@ export async function buildApp(config: RuntimeConfig, service: ObserverService) 
   // it is never persisted and never returned in full by the API.
   let githubToken: string | undefined = config.githubToken;
   const syncStatus = new Map<string, SyncStatus>();
+  let accountScan: AccountScan | undefined;
+
+  const discoveryView = (): DiscoveryView => ({
+    ...(accountScan ? {account: accountScan.account, scannedAt: accountScan.scannedAt} : {}),
+    repositories: (accountScan?.repositories ?? []).map((repo) => {
+      const adopted = repo.standardVersion !== undefined;
+      return {
+        repository: repo.repository,
+        ...(repo.standardVersion !== undefined ? {standardVersion: repo.standardVersion} : {}),
+        adopted,
+        monitorable: adopted && compareStandardVersion(repo.standardVersion!, MIN_SUPPORTED_STANDARD) >= 0,
+        monitored: service.configs().some((entry) => entry.repository === repo.repository),
+        private: repo.private,
+        fork: repo.fork,
+        updatedAt: repo.updatedAt
+      };
+    })
+  });
 
   const settingsView = () => ({
     demo: config.demo,
@@ -59,6 +96,15 @@ export async function buildApp(config: RuntimeConfig, service: ObserverService) 
   });
 
   app.get('/api/settings', async () => settingsView());
+
+  app.get('/api/discovery', async () => discoveryView());
+
+  app.post('/api/discovery/scan', async (request, reply) => {
+    if (!githubToken) return reply.code(400).send({error: 'Configure a GitHub token in settings before scanning.'});
+    try { accountScan = await service.scanAccountStandards(); }
+    catch (error) { return reply.code(502).send({error: error instanceof Error ? error.message : String(error)}); }
+    return discoveryView();
+  });
 
   app.put('/api/settings/github-token', async (request, reply) => {
     const body = request.body as {token?: unknown} | undefined;
