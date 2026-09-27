@@ -45,6 +45,11 @@ export class SnapshotStore {
     return rows.map((row) => ({repository: row.repository, ...(row.version_hint ? {versionHint: row.version_hint} : {})}));
   }
 
+  unregister(repository: string): void {
+    this.db.prepare('DELETE FROM snapshots WHERE repository = ?').run(repository);
+    this.db.prepare('DELETE FROM repositories WHERE repository = ?').run(repository);
+  }
+
   save(snapshot: VersionSnapshot): void {
     this.register({repository: snapshot.repository, versionHint: snapshot.version});
     this.db.prepare(`

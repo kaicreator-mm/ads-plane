@@ -76,11 +76,15 @@ npm start -w @ads-plane/server
 
 Public repositories can be read without a token, but authenticated access is recommended for rate limits and required for private repositories.
 
+Alternatively, start with no repositories configured and add them at runtime: open the UI, click **Settings**, paste a read-only GitHub token and add repositories (`owner/repo@version`). The token is kept in server memory only and is never displayed again. See [Configuration](docs/CONFIGURATION.md).
+
 Multiple repositories:
 
 ```bash
 ADS_REPOSITORIES='owner/project-a@v1.2,owner/project-b@v0.4' npm start -w @ads-plane/server
 ```
+
+The UI is localized in English and Chinese; switch languages with the `EN / 中文` toggle in the header (the choice is remembered per browser).
 
 ## Development
 
