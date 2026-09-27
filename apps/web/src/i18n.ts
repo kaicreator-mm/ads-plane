@@ -83,7 +83,14 @@ const en = {
   syncStateOk: 'Synced',
   syncStateError: 'Sync failed',
   lastSync: 'Last sync',
-  errorPrefix: 'Error'
+  errorPrefix: 'Error',
+  allProjects: 'All projects',
+  projectsOverview: 'Projects overview',
+  syncAll: 'Sync all',
+  syncThis: 'Sync',
+  openProject: 'Open',
+  noProjects: 'No repositories configured',
+  noProjectsHint: 'Add repositories in settings to start monitoring.',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -169,7 +176,14 @@ const zh: Record<MessageKey, string> = {
   syncStateOk: '已同步',
   syncStateError: '同步失败',
   lastSync: '上次同步',
-  errorPrefix: '错误'
+  errorPrefix: '错误',
+  allProjects: '所有项目',
+  projectsOverview: '项目总览',
+  syncAll: '全部同步',
+  syncThis: '同步',
+  openProject: '查看',
+  noProjects: '尚未配置仓库',
+  noProjectsHint: '在设置中添加仓库以开始监控。',
 };
 
 export const messages: Record<Lang, Record<MessageKey, string>> = {en, zh};

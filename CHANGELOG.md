@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Multi-project monitoring overview (#21):
+  - New all-projects view: cards per configured repository with progress, candidate/release badges, sync status, last-sync time, per-repo sync and one-click navigation; Sync-all action; auto-refresh while any repository is syncing.
+  - Repository selector gains an "All projects" entry; multi-project deployments land on the overview, single-project deployments still land directly on the project.
+  - Periodic reconciliation (`ADS_SYNC_INTERVAL_SECONDS`) and background sync powers the monitoring loop; validated live against four v3.4.0/v4.0.0 repositories.
 - ai-development-standard v3.4-style project compatibility, from the domain-ai-creator trial (#18):
   - `.dev-standard/VERSION` / `VERSION` artifacts now parse key=value pin blocks (`version=3.4.0`) instead of rendering the whole file.
   - Structured `ai-dev:event:v2` blocks in issue bodies are parsed alongside comment events and attributed to their task, so gates recorded on dedicated review/validation issues attach to the matching implementation task.
