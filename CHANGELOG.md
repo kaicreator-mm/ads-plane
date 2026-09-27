@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Documentation: added Chinese translations for all docs under `docs/zh/`, a root `README.zh-CN.md`, and cross-language links. English remains canonical (#16).
 - UI runtime configuration, localization and UX pass (#14):
   - Settings drawer manages the GitHub token and repository list at runtime (`/api/settings`); env vars remain boot defaults. Token is memory-only, returned as a masked hint, never persisted.
   - Repository syncs run in the background with per-repo status (`syncing`/`ok`/`error`) instead of blocking HTTP requests.

@@ -1,3 +1,5 @@
+> 🌐 English | [中文](zh/CONFIGURATION.md)
+
 # Configuration
 
 Configuration comes from two layers:

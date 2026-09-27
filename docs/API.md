@@ -1,3 +1,5 @@
+> 🌐 English | [中文](zh/API.md)
+
 # HTTP API
 
 Default endpoint: `http://localhost:4310`.

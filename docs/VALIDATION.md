@@ -1,3 +1,5 @@
+> 🌐 English | [中文](zh/VALIDATION.md)
+
 # Validation — v0.0.1
 
 ## Repository-real validation
