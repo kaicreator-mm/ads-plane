@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RepositoryFacts } from '@ads-plane/contracts';
-import { parseAgentEvent, reduceRepositoryFacts } from './index.js';
+import { parseAgentEvent, parseIssueBodyEvent, reduceRepositoryFacts } from './index.js';
 
 const baseFacts: RepositoryFacts = {
   repository: 'acme/project',
@@ -63,5 +63,82 @@ describe('parseAgentEvent', () => {
     expect(parsed?.event).toBe('DISPATCH_CLAIMED');
     expect(parsed?.dispatchId).toBe('D-1');
     expect(parsed?.operatorId).toBe('web-1');
+  });
+});
+
+describe('v3.4-style issue-body events and task-id dependencies', () => {
+  const implementationBody = (taskId: string, dependsOn?: string) => `<!-- ai-dev:event:v2 -->
+event: IMPLEMENTATION_TASK
+task_id: ${taskId}
+parent_dag: #9
+${dependsOn ? `depends_on_task_ids: [${dependsOn}]` : ''}
+merge_target: version/v0.1
+
+Status: ${dependsOn ? `WAITING_DEPENDENCY(${dependsOn})` : 'READY'}.`;
+
+  const v34Facts: RepositoryFacts = {
+    repository: 'acme/dac',
+    defaultBranch: 'main',
+    defaultBranchSha: 'main-sha',
+    issues: [
+      { number: 40, id: 40, title: '[v0.1 T401] Orchestration core', body: implementationBody('T401'), state: 'open', labels: [], assignees: [], htmlUrl: 'https://example/40', updatedAt: '2026-01-01T00:00:00Z' },
+      { number: 42, id: 42, title: '[v0.1 T403] Conformance closure', body: implementationBody('T403', 'T401'), state: 'open', labels: [], assignees: [], htmlUrl: 'https://example/42', updatedAt: '2026-01-01T00:00:00Z' },
+      { number: 84, id: 84, title: '[v0.1 T403] Fresh Independent Review — PR #90 exact HEAD', body: 'Parent task: #42 / T403\nPR: #90', state: 'closed', labels: [], assignees: [], htmlUrl: 'https://example/84', updatedAt: '2026-01-01T00:00:00Z' },
+      { number: 94, id: 94, title: '[v0.1 T403R1] Fresh Independent rereview — repaired HEAD', body: 'event: REVIEW_RESULT\nstatus: PASS\nhead_sha: sha-90', state: 'open', labels: [], assignees: [], htmlUrl: 'https://example/94', updatedAt: '2026-01-01T00:00:00Z' },
+      { number: 95, id: 95, title: '[v0.1 T404] Repository validation', body: 'event: VALIDATION_RESULT\nstatus: PASS\nhead_sha: sha-90', state: 'open', labels: [], assignees: [], htmlUrl: 'https://example/95', updatedAt: '2026-01-01T00:00:00Z' }
+    ],
+    dependencies: [],
+    pullRequests: [
+      { number: 90, title: 'feat(T403): conformance', state: 'open', merged: false, headSha: 'sha-90', baseSha: 'main-sha', headRef: 'task/t403', baseRef: 'main', htmlUrl: 'https://example/pr90', updatedAt: '2026-01-01T00:00:00Z' }
+    ],
+    workflowRuns: [],
+    comments: [],
+    events: [],
+    artifacts: [],
+    collectedAt: '2026-01-01T00:01:00Z'
+  };
+  v34Facts.events = v34Facts.issues.map(parseIssueBodyEvent).filter((v): v is NonNullable<typeof v> => Boolean(v));
+
+  it('classifies implementation vs evidence issues and keeps one work item per task', () => {
+    const snapshot = reduceRepositoryFacts(v34Facts);
+    expect(snapshot.workItems.map((v) => v.taskId).sort()).toEqual(['T401', 'T403', 'T404']);
+    expect(snapshot.progress.total).toBe(3);
+    // review issue #84 and rereview #94 are evidence for T403, not separate work items
+    expect(snapshot.workItems.find((v) => v.issueNumber === 84)).toBeUndefined();
+    expect(snapshot.workItems.find((v) => v.issueNumber === 94)).toBeUndefined();
+  });
+
+  it('resolves depends_on_task_ids to the implementation issue and blocks the task', () => {
+    const snapshot = reduceRepositoryFacts(v34Facts);
+    const t403 = snapshot.workItems.find((v) => v.taskId === 'T403');
+    expect(t403?.blockedBy).toEqual([40]);
+    expect(t403?.blockingDependencies).toEqual([40]);
+    expect(t403?.workflowState).toBe('blocked');
+    expect(snapshot.queues.blocked).toEqual([42]);
+    expect(t403?.provenance.some((p) => p.ref === 'body-task-ids:#42')).toBe(true);
+  });
+
+  it('attaches evidence-issue body events to the matching implementation work item', () => {
+    const snapshot = reduceRepositoryFacts(v34Facts);
+    const t403 = snapshot.workItems.find((v) => v.taskId === 'T403');
+    expect(t403?.review.state).toBe('PASS');
+    expect(t403?.review.exactSha).toBe('sha-90');
+    expect(t403?.review.provenance[0]?.ref).toBe('issue:#94');
+  });
+
+  it('binds the PR through evidence-issue references and applies validation evidence', () => {
+    const snapshot = reduceRepositoryFacts(v34Facts);
+    const t403 = snapshot.workItems.find((v) => v.taskId === 'T403');
+    expect(t403?.pullRequest?.number).toBe(90);
+    // T404 has no implementation issue: the repository-validation issue keeps the task visible
+    const t404 = snapshot.workItems.find((v) => v.taskId === 'T404');
+    expect(t404?.issueNumber).toBe(95);
+    expect(t404?.validation.state).toBe('PASS');
+  });
+
+  it('normalizes rereview suffixes (T403R1 -> T403) deterministically', () => {
+    const snapshot = reduceRepositoryFacts(structuredClone(v34Facts));
+    expect(snapshot.workItems.find((v) => v.taskId === 'T403R1')).toBeUndefined();
+    expect(snapshot).toEqual(reduceRepositoryFacts(structuredClone(v34Facts)));
   });
 });

@@ -5,12 +5,25 @@ import type {
   DispatchSnapshot
 } from '@ads-plane/contracts';
 
-const TASK_RE = /\b(T[- ]?\d{3,})\b/i;
+const TASK_RE = /\bT[- ]?\d{3,}/i;
+const TASK_ID_GLOBAL_RE = /\bT[- ]?\d{3,}/gi;
 const ISSUE_REF_RE = /#(\d+)/g;
+const EVIDENCE_TITLE_RE = /\bfresh independent (re-?)?review\b|\breview handoff\b|\brepository validation\b/i;
+
+function canonicalTaskId(raw: string): string {
+  return raw.toUpperCase().replace(' ', '-');
+}
 
 function normalizeTaskId(title: string, issueNumber: number): string {
   const match = title.match(TASK_RE);
-  return match ? match[1]!.toUpperCase().replace(' ', '-') : `ISSUE-${issueNumber}`;
+  return match ? canonicalTaskId(match[0]) : `ISSUE-${issueNumber}`;
+}
+
+/** Task key for an issue: body `task_id:` field wins, then the first T-id in the title. */
+export function taskKeyOfIssue(issue: IssueFact): string | undefined {
+  const fromBody = bodyField(issue.body, 'task_id')?.match(TASK_RE)?.[0];
+  const raw = fromBody ?? issue.title.match(TASK_RE)?.[0];
+  return raw ? canonicalTaskId(raw) : undefined;
 }
 
 function bodyField(body: string, field: string): string | undefined {
@@ -51,16 +64,16 @@ function parseBodyDependencies(body: string): number[] {
   return [...field.matchAll(ISSUE_REF_RE)].map((m) => Number(m[1]));
 }
 
-export function parseAgentEvent(comment: CommentFact): AgentEventFact | undefined {
+function parseEventBody(body: string, issueNumber: number, commentId: number, source: ProvenanceRef): AgentEventFact | undefined {
   const interesting = /ai-dev:event:v2|\bevent\s*:|REVIEW_RESULT|VALIDATION_RESULT|RELEASE_QUALIFICATION|CANDIDATE_STATE_CHANGED|DISPATCH_/i;
-  if (!interesting.test(comment.body)) return undefined;
+  if (!interesting.test(body)) return undefined;
 
   const raw: Record<string, string> = {};
-  for (const line of comment.body.split(/\r?\n/)) {
+  for (const line of body.split(/\r?\n/)) {
     const match = line.match(/^\s*(?:[-*]\s*)?([A-Za-z0-9_.-]+)\s*:\s*[`"']?(.+?)[`"']?\s*$/);
     if (match) raw[match[1]!.toLowerCase()] = match[2]!.trim();
   }
-  const event = raw.event ?? comment.body.match(/\b([A-Z][A-Z0-9_]+_(?:RESULT|CHANGED|CLAIMED|REQUEST|DECISION))\b/)?.[1];
+  const event = raw.event ?? body.match(/\b([A-Z][A-Z0-9_]+_(?:RESULT|CHANGED|CLAIMED|REQUEST|DECISION))\b/)?.[1];
   if (!event) return undefined;
   const status = raw.status ?? raw.outcome ?? raw.result;
   const candidateStateRaw = raw.candidate_state?.toUpperCase();
@@ -69,8 +82,8 @@ export function parseAgentEvent(comment: CommentFact): AgentEventFact | undefine
   const releaseStates = new Set(['NOT_READY','READY','CONDITIONAL','BLOCKED','FAIL']);
   return {
     event,
-    issueNumber: comment.issueNumber,
-    commentId: comment.id,
+    issueNumber,
+    commentId,
     ...(raw.actor_role ? { actorRole: raw.actor_role } : {}),
     ...(raw.operator_id ? { operatorId: raw.operator_id } : {}),
     ...(raw.dispatch_id ? { dispatchId: raw.dispatch_id } : {}),
@@ -81,29 +94,34 @@ export function parseAgentEvent(comment: CommentFact): AgentEventFact | undefine
     ...(candidateStateRaw && candidateStates.has(candidateStateRaw) ? { candidateState: candidateStateRaw as CandidateState } : {}),
     ...(releaseStateRaw && releaseStates.has(releaseStateRaw) ? { releaseState: releaseStateRaw as ReleaseState } : {}),
     ...(raw.occurred_at ? { occurredAt: raw.occurred_at } : {}),
-    source: { kind: 'comment', ref: `issue:#${comment.issueNumber}/comment:${comment.id}`, url: comment.htmlUrl },
+    source,
     raw
   };
+}
+
+export function parseAgentEvent(comment: CommentFact): AgentEventFact | undefined {
+  return parseEventBody(comment.body, comment.issueNumber, comment.id, { kind: 'comment', ref: `issue:#${comment.issueNumber}/comment:${comment.id}`, url: comment.htmlUrl });
+}
+
+/** Parses the structured `ai-dev:event:v2` block embedded in an issue body (v3.4-style conventions). */
+export function parseIssueBodyEvent(issue: IssueFact): AgentEventFact | undefined {
+  const taskId = taskKeyOfIssue(issue);
+  const event = parseEventBody(issue.body, issue.number, 0, issueProvenance(issue));
+  return event ? {...event, ...(taskId ? { taskId } : {})} : undefined;
 }
 
 function issueProvenance(issue: IssueFact): ProvenanceRef {
   return { kind: 'issue', ref: `issue:#${issue.number}`, url: issue.htmlUrl };
 }
 
-function dependencyFor(issue: IssueFact, facts: RepositoryFacts): DependencyFact {
-  return facts.dependencies.find((d) => d.issueNumber === issue.number) ?? {
-    issueNumber: issue.number,
-    blockedBy: parseBodyDependencies(issue.body),
-    source: 'body-fallback'
-  };
-}
-
-function prForIssue(issue: IssueFact, pullRequests: PullRequestFact[], comments: CommentFact[]): PullRequestFact | undefined {
+function prForIssue(issue: IssueFact, taskId: string, facts: RepositoryFacts, taskKey: (issue: IssueFact) => string | undefined): PullRequestFact | undefined {
   const refs = new Set<number>();
-  const scan = `${issue.body}\n${comments.filter((c) => c.issueNumber === issue.number).map((c) => c.body).join('\n')}`;
+  const taskTexts = facts.issues
+    .filter((other) => other.number === issue.number || taskKey(other)?.toLowerCase() === taskId.toLowerCase())
+    .map((other) => `${other.title}\n${other.body}`).join('\n');
+  const scan = `${taskTexts}\n${facts.comments.filter((c) => c.issueNumber === issue.number).map((c) => c.body).join('\n')}`;
   for (const match of scan.matchAll(/(?:PR|pull request)\s*#(\d+)/ig)) refs.add(Number(match[1]));
-  const taskId = normalizeTaskId(issue.title, issue.number).toLowerCase();
-  return pullRequests.find((pr) => refs.has(pr.number)) ?? pullRequests.find((pr) => pr.title.toLowerCase().includes(taskId));
+  return facts.pullRequests.find((pr) => refs.has(pr.number)) ?? facts.pullRequests.find((pr) => pr.title.toLowerCase().includes(taskId.toLowerCase()));
 }
 
 function latest<T>(items: T[], time: (item: T) => string): T | undefined {
@@ -174,14 +192,82 @@ function deriveWorkflow(issue: IssueFact, events: AgentEventFact[], blocked: boo
   return 'ready';
 }
 
+type IssueRole = 'implementation' | 'evidence' | 'plain';
+
+function issueRole(issue: IssueFact): IssueRole {
+  const bodyEvent = parseIssueBodyEvent(issue);
+  if (bodyEvent && (bodyEvent.raw['task_id'] || bodyEvent.event === 'IMPLEMENTATION_TASK')) return 'implementation';
+  if (bodyEvent && /REVIEW|VALIDATION|RELEASE_QUALIFICATION/.test(bodyEvent.event)) return 'evidence';
+  if (EVIDENCE_TITLE_RE.test(issue.title)) return 'evidence';
+  return 'plain';
+}
+
+function parseTaskIdDependencies(body: string): string[] {
+  const field = bodyField(body, 'depends_on_task_ids');
+  if (!field || field === '—' || field === '-' || field === '[]') return [];
+  return [...field.matchAll(TASK_ID_GLOBAL_RE)].map((m) => canonicalTaskId(m[0]));
+}
+
 export function reduceRepositoryFacts(facts: RepositoryFacts, versionHint?: string): VersionSnapshot {
   const issueByNumber = new Map(facts.issues.map((i) => [i.number, i]));
-  const taskIssues = facts.issues.filter((issue) => /\bT[- ]?\d{3,}\b/i.test(issue.title) || issue.labels.includes('type:task'));
-  const workItems: WorkItemSnapshot[] = taskIssues.map((issue) => {
-    const dep = dependencyFor(issue, facts);
+  const taskIssues = facts.issues.filter((issue) => TASK_RE.test(issue.title) || issue.labels.includes('type:task'));
+  const roleByIssue = new Map<number, IssueRole>(taskIssues.map((issue) => [issue.number, issueRole(issue)]));
+
+  // One work item per task id: implementation issues win, then the smallest issue number.
+  const taskOwner = new Map<string, number>();
+  for (const issue of taskIssues) {
+    const taskId = taskKeyOfIssue(issue);
+    if (!taskId || roleByIssue.get(issue.number) === 'evidence') continue;
+    const current = taskOwner.get(taskId);
+    const currentRole = current === undefined ? undefined : roleByIssue.get(current);
+    if (current === undefined
+      || (roleByIssue.get(issue.number) === 'implementation' && currentRole !== 'implementation')
+      || (roleByIssue.get(issue.number) === currentRole && issue.number < current)) {
+      taskOwner.set(taskId, issue.number);
+    }
+  }
+  // Keep tasks visible when only review/validation issues exist for them.
+  const evidenceFallback = new Map<string, number>();
+  for (const issue of taskIssues) {
+    if (roleByIssue.get(issue.number) !== 'evidence') continue;
+    const taskId = taskKeyOfIssue(issue);
+    if (taskId && !taskOwner.has(taskId) && !evidenceFallback.has(taskId)) evidenceFallback.set(taskId, issue.number);
+  }
+  const issueNumberOfTask = (taskId: string): number | undefined => taskOwner.get(taskId) ?? evidenceFallback.get(taskId);
+
+  const workItemIssues = taskIssues.filter((issue) => {
+    const taskId = taskKeyOfIssue(issue);
+    return taskId ? taskOwner.get(taskId) === issue.number || evidenceFallback.get(taskId) === issue.number : roleByIssue.get(issue.number) !== 'evidence';
+  });
+
+  const dependencyFor = (issue: IssueFact): DependencyFact => {
+    // GitHub's native dependency endpoint can legitimately return an empty set for
+    // repositories that express task dependencies only in body metadata, so native
+    // entries take precedence per-id but never silence body-derived edges.
+    const native = facts.dependencies.find((d) => d.issueNumber === issue.number);
+    const nativeBlockedBy = native?.blockedBy ?? [];
+    const merge = (bodyDeps: number[]): { issueNumber: number; blockedBy: number[] } => ({
+      issueNumber: issue.number,
+      blockedBy: [...nativeBlockedBy, ...bodyDeps.filter((n) => !nativeBlockedBy.includes(n))]
+    });
+    if (bodyField(issue.body, 'Depends On') !== undefined) {
+      const merged = merge(parseBodyDependencies(issue.body));
+      return {...merged, source: merged.blockedBy.length > 0 && nativeBlockedBy.length === 0 ? 'body-fallback' : 'native'};
+    }
+    const resolved = parseTaskIdDependencies(issue.body).map(issueNumberOfTask).filter((n): n is number => n !== undefined);
+    if (resolved.length > 0) {
+      const merged = merge(resolved);
+      return {...merged, source: nativeBlockedBy.length > 0 ? 'native' : 'body-task-ids'};
+    }
+    return native ?? { issueNumber: issue.number, blockedBy: [], source: 'body-fallback' };
+  };
+
+  const workItems: WorkItemSnapshot[] = workItemIssues.map((issue) => {
+    const taskId = taskKeyOfIssue(issue) ?? normalizeTaskId(issue.title, issue.number);
+    const dep = dependencyFor(issue);
     const blockingDependencies = dep.blockedBy.filter((n) => issueByNumber.get(n)?.state !== 'closed');
-    const events = facts.events.filter((e) => e.issueNumber === issue.number);
-    const pr = prForIssue(issue, facts.pullRequests, facts.comments);
+    const events = facts.events.filter((e) => (e.taskId ? e.taskId === taskId : e.issueNumber === issue.number));
+    const pr = prForIssue(issue, taskId, facts, taskKeyOfIssue);
     const review = gateFromEvents('review', events, pr?.headSha);
     const validation = gateFromEvents('validation', events, pr?.headSha);
     const ci = ciGate(pr, facts.workflowRuns);
@@ -199,7 +285,7 @@ export function reduceRepositoryFacts(facts: RepositoryFacts, versionHint?: stri
       htmlUrl: pr.htmlUrl
     } : undefined;
     return {
-      taskId: normalizeTaskId(issue.title, issue.number),
+      taskId,
       issueNumber: issue.number,
       title: issue.title,
       lane: normalizeLane(issue),
@@ -217,7 +303,11 @@ export function reduceRepositoryFacts(facts: RepositoryFacts, versionHint?: stri
       readyForReview: workflowState === 'review-ready' || (Boolean(pr) && reviewPolicy !== 'not-required' && review.state === 'NOT_RUN'),
       readyForValidation: workflowState === 'validation-needed' || (Boolean(pr) && validation.state === 'NOT_RUN'),
       readyForMerge: workflowState === 'merge-ready' || (Boolean(pr) && blockingDependencies.length === 0 && validationSatisfied && reviewSatisfied && ciSatisfied),
-      provenance: [issueProvenance(issue), ...(dep.source === 'body-fallback' ? [{ kind: 'derived' as const, ref: `body-dependencies:#${issue.number}`, note: 'Native dependency fact unavailable; parsed Depends On field.' }] : [])]
+      provenance: [
+        issueProvenance(issue),
+        ...(dep.source === 'body-fallback' ? [{ kind: 'derived' as const, ref: `body-dependencies:#${issue.number}`, note: 'Native dependency fact unavailable; parsed Depends On field.' }] : []),
+        ...(dep.source === 'body-task-ids' ? [{ kind: 'derived' as const, ref: `body-task-ids:#${issue.number}`, note: 'Native dependency fact unavailable; resolved depends_on_task_ids via task_id fields.' }] : [])
+      ]
     };
   }).sort((a, b) => a.taskId.localeCompare(b.taskId));
 
