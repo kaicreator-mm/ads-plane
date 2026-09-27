@@ -1,3 +1,5 @@
+> 🌐 English | [中文](zh/RELEASE-v0.0.1.md)
+
 # ADS Plane v0.0.1 release notes
 
 ## Theme

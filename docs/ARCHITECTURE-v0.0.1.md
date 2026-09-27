@@ -1,3 +1,5 @@
+> 🌐 English | [中文](zh/ARCHITECTURE-v0.0.1.md)
+
 # ADS Plane v0.0.1 Architecture
 
 Status: Frozen for v0.0.1

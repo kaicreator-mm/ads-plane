@@ -1,3 +1,5 @@
+> 🌐 English | [中文](zh/HANDOFF_BROWSER_VALIDATION.md)
+
 # Local Browser Validation Handoff — v0.0.1
 
 Use this only on a machine with Node.js 22+, npm registry access and a real Chromium/Chrome-class browser.

@@ -1,3 +1,5 @@
+> 🌐 English | [中文](zh/PRD-v0.0.1.md)
+
 # ADS Plane v0.0.1 PRD — Read-only Development Observer
 
 Status: Frozen for v0.0.1

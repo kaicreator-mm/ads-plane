@@ -1,3 +1,5 @@
+> 🌐 English | [中文](zh/SECURITY.md)
+
 # Security and trust boundaries
 
 ## Read-only v0.0.1

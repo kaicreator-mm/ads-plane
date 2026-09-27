@@ -1,3 +1,5 @@
+> 🌐 English | [中文](zh/DATA_MODEL.md)
+
 # Data model
 
 ADS Plane has two deliberately separate layers.

@@ -1,5 +1,7 @@
 # ADS Plane
 
+> 🌐 English | [中文](README.zh-CN.md)
+
 **ADS Plane** is the read-only observer and future control-plane foundation for projects adopting [AI Development Standard](https://github.com/kaicreator-mm/ai-development-standard).
 
 Version: **0.0.1**
@@ -152,17 +154,21 @@ See `.dev-standard/PROJECT_OVERRIDES.md`.
 
 ## Documentation
 
-- [Product requirements](docs/PRD-v0.0.1.md)
-- [Architecture](docs/ARCHITECTURE-v0.0.1.md)
-- [Task DAG](docs/TASK_DAG-v0.0.1.md)
-- [API](docs/API.md)
-- [Configuration](docs/CONFIGURATION.md)
-- [Data model](docs/DATA_MODEL.md)
-- [GitHub permissions](docs/GITHUB_PERMISSIONS.md)
-- [Operations](docs/OPERATIONS.md)
-- [Development](docs/DEVELOPMENT.md)
-- [Security](docs/SECURITY.md)
-- [Release notes](docs/RELEASE-v0.0.1.md)
+English docs are canonical; Chinese translations live in [`docs/zh/`](docs/zh/) (see also the [Chinese README](README.zh-CN.md)). Where translations diverge, the English version wins.
+
+- [Product requirements](docs/PRD-v0.0.1.md) · [中文](docs/zh/PRD-v0.0.1.md)
+- [Architecture](docs/ARCHITECTURE-v0.0.1.md) · [中文](docs/zh/ARCHITECTURE-v0.0.1.md)
+- [Task DAG](docs/TASK_DAG-v0.0.1.md) · [中文](docs/zh/TASK_DAG-v0.0.1.md)
+- [API](docs/API.md) · [中文](docs/zh/API.md)
+- [Configuration](docs/CONFIGURATION.md) · [中文](docs/zh/CONFIGURATION.md)
+- [Data model](docs/DATA_MODEL.md) · [中文](docs/zh/DATA_MODEL.md)
+- [GitHub permissions](docs/GITHUB_PERMISSIONS.md) · [中文](docs/zh/GITHUB_PERMISSIONS.md)
+- [Operations](docs/OPERATIONS.md) · [中文](docs/zh/OPERATIONS.md)
+- [Development](docs/DEVELOPMENT.md) · [中文](docs/zh/DEVELOPMENT.md)
+- [Security](docs/SECURITY.md) · [中文](docs/zh/SECURITY.md)
+- [Release notes](docs/RELEASE-v0.0.1.md) · [中文](docs/zh/RELEASE-v0.0.1.md)
+- [Validation](docs/VALIDATION.md) · [中文](docs/zh/VALIDATION.md)
+- [Browser validation handoff](docs/HANDOFF_BROWSER_VALIDATION.md) · [中文](docs/zh/HANDOFF_BROWSER_VALIDATION.md)
 
 ## Roadmap after v0.0.1
 

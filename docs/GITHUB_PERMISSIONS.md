@@ -1,3 +1,5 @@
+> 🌐 English | [中文](zh/GITHUB_PERMISSIONS.md)
+
 # GitHub permissions
 
 v0.0.1 is intentionally read-only.
