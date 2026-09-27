@@ -64,6 +64,19 @@ function parseBodyDependencies(body: string): number[] {
   return [...field.matchAll(ISSUE_REF_RE)].map((m) => Number(m[1]));
 }
 
+/**
+ * Markdown-list dependency variant used by v3.4.0-style frozen-DAG projection
+ * issues: `- blocked by: T-101 (#12)`. Issue refs are used directly; bare task
+ * ids are resolved through the task-key map by the caller.
+ */
+function parseBlockedByList(body: string): {refs: number[]; taskIds: string[]} {
+  const field = body.match(/^\s*[-*]\s*blocked\s*by:\s*(.+)$/im)?.[1]?.trim();
+  if (!field || /^none$/i.test(field) || field === '—' || field === '-') return {refs: [], taskIds: []};
+  const refs = [...field.matchAll(ISSUE_REF_RE)].map((m) => Number(m[1]));
+  const taskIds = [...field.matchAll(TASK_ID_GLOBAL_RE)].map((m) => canonicalTaskId(m[0]));
+  return {refs, taskIds};
+}
+
 function parseEventBody(body: string, issueNumber: number, commentId: number, source: ProvenanceRef): AgentEventFact | undefined {
   const interesting = /ai-dev:event:v2|\bevent\s*:|REVIEW_RESULT|VALIDATION_RESULT|RELEASE_QUALIFICATION|CANDIDATE_STATE_CHANGED|DISPATCH_/i;
   if (!interesting.test(body)) return undefined;
@@ -248,16 +261,22 @@ export function reduceRepositoryFacts(facts: RepositoryFacts, versionHint?: stri
     const nativeBlockedBy = native?.blockedBy ?? [];
     const merge = (bodyDeps: number[]): { issueNumber: number; blockedBy: number[] } => ({
       issueNumber: issue.number,
-      blockedBy: [...nativeBlockedBy, ...bodyDeps.filter((n) => !nativeBlockedBy.includes(n))]
+      blockedBy: [...new Set([...nativeBlockedBy, ...bodyDeps.filter((n) => !nativeBlockedBy.includes(n))])]
     });
     if (bodyField(issue.body, 'Depends On') !== undefined) {
       const merged = merge(parseBodyDependencies(issue.body));
       return {...merged, source: merged.blockedBy.length > 0 && nativeBlockedBy.length === 0 ? 'body-fallback' : 'native'};
     }
-    const resolved = parseTaskIdDependencies(issue.body).map(issueNumberOfTask).filter((n): n is number => n !== undefined);
-    if (resolved.length > 0) {
-      const merged = merge(resolved);
+    const resolvedTaskIds = parseTaskIdDependencies(issue.body).map(issueNumberOfTask).filter((n): n is number => n !== undefined);
+    if (resolvedTaskIds.length > 0) {
+      const merged = merge(resolvedTaskIds);
       return {...merged, source: nativeBlockedBy.length > 0 ? 'native' : 'body-task-ids'};
+    }
+    const blockedByList = parseBlockedByList(issue.body);
+    const resolvedListRefs = blockedByList.taskIds.map(issueNumberOfTask).filter((n): n is number => n !== undefined);
+    if (blockedByList.refs.length > 0 || resolvedListRefs.length > 0) {
+      const merged = merge([...blockedByList.refs, ...resolvedListRefs]);
+      return {...merged, source: nativeBlockedBy.length > 0 ? 'native' : resolvedListRefs.length > 0 ? 'body-task-ids' : 'body-fallback'};
     }
     return native ?? { issueNumber: issue.number, blockedBy: [], source: 'body-fallback' };
   };

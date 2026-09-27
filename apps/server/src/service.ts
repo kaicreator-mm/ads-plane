@@ -1,4 +1,4 @@
-import { GitHubReadOnlyClient } from '@ads-plane/github-adapter';
+import { GitHubReadOnlyClient, type AccountScan } from '@ads-plane/github-adapter';
 import { reduceRepositoryFacts } from '@ads-plane/reducer';
 import { SnapshotStore, type RepositoryConfig } from '@ads-plane/storage';
 
@@ -10,6 +10,8 @@ export class ObserverService {
   }
 
   setClient(client: GitHubReadOnlyClient): void { this.client = client; }
+
+  scanAccountStandards(): Promise<AccountScan> { return this.client.scanAccountStandards(); }
 
   unregister(repository: string): void { this.store.unregister(repository); }
 

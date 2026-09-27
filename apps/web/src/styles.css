@@ -120,6 +120,10 @@ button { cursor: pointer; }
 .repo-list .danger { border:1px solid transparent; border-radius:8px; padding:6px 10px; background:transparent; color:var(--muted); font-size:12px; white-space:nowrap; }
 .repo-list .danger:hover { color:var(--bad); border-color:var(--bad); }
 .repo-list .danger.confirm { background:var(--bad); color:#fff; border-color:var(--bad); }
+.discovery-list { max-height:340px; overflow:auto; }
+.discovery-list button { border:1px solid var(--border); border-radius:8px; padding:6px 10px; background:var(--surface); color:var(--text); font-size:12px; white-space:nowrap; }
+.discovery-list button:disabled { opacity:.5; cursor:not-allowed; }
+.muted-dash { color:var(--muted); }
 .empty-state button { margin-top:16px; border:1px solid var(--border); border-radius:9px; padding:10px 16px; background:var(--surface); color:var(--text); }
 .overview-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; }
 .project-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; box-shadow:0 1px 2px rgba(20,30,50,.03); cursor:pointer; display:flex; flex-direction:column; gap:12px; min-width:0; }

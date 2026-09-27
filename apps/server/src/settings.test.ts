@@ -74,3 +74,46 @@ describe('runtime settings API', () => {
     store.close();
   }, 20000);
 });
+
+describe('account discovery API', () => {
+  it('requires a token and classifies scanned repositories', async () => {
+    const store = new SnapshotStore();
+    const client = new GitHubReadOnlyClient({fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.endsWith('/user')) return new Response(JSON.stringify({login: 'kaicreator-mm'}), {headers: {'content-type': 'application/json'}});
+      if (url.includes('/user/repos')) return new Response(JSON.stringify([
+        {full_name: 'kaicreator-mm/dac', private: true, fork: false, updated_at: 'now'},
+        {full_name: 'kaicreator-mm/legacy', private: false, fork: false, updated_at: 'now'},
+        {full_name: 'kaicreator-mm/plain', private: false, fork: false, updated_at: 'now'}
+      ]), {headers: {'content-type': 'application/json'}});
+      if (url.includes('/kaicreator-mm/dac/')) return new Response(JSON.stringify({type: 'file', name: 'VERSION', path: '.dev-standard/VERSION', sha: 's', content: Buffer.from('version=3.4.0').toString('base64'), encoding: 'base64'}), {headers: {'content-type': 'application/json'}});
+      if (url.includes('/kaicreator-mm/legacy/')) return new Response(JSON.stringify({type: 'file', name: 'VERSION', path: '.dev-standard/VERSION', sha: 's', content: Buffer.from('version=2.0.0').toString('base64'), encoding: 'base64'}), {headers: {'content-type': 'application/json'}});
+      return new Response(JSON.stringify({message: 'not found'}), {status: 404, headers: {'content-type': 'application/json'}});
+    }});
+    const service = new ObserverService(client, store);
+    const config = loadConfig({ADS_DATA_DIR: '.data-test', ADS_PORT: '0'});
+    const app = await buildApp(config, service);
+
+    const noToken = await app.inject({method: 'POST', url: '/api/discovery/scan'});
+    expect(noToken.statusCode).toBe(400);
+
+    const scanned = await app.inject({method: 'POST', url: '/api/discovery/scan', headers: {authorization: 'Bearer test'}});
+    expect(scanned.statusCode).toBe(400); // token only settable via settings endpoint
+
+    await app.inject({method: 'PUT', url: '/api/settings/github-token', payload: {token: 'ghp_discovery_token_x'}});
+    service.setClient(client); // keep the fetch-stubbed client after the real one was swapped in
+    const result = await app.inject({method: 'POST', url: '/api/discovery/scan'});
+    const view = result.json();
+    expect(view.account).toBe('kaicreator-mm');
+    const byName = Object.fromEntries(view.repositories.map((r: {repository: string}) => [r.repository, r]));
+    expect(byName['kaicreator-mm/dac']).toMatchObject({adopted: true, monitorable: true, standardVersion: '3.4.0', monitored: false});
+    expect(byName['kaicreator-mm/legacy']).toMatchObject({adopted: true, monitorable: false, standardVersion: '2.0.0'});
+    expect(byName['kaicreator-mm/plain']).toMatchObject({adopted: false, monitorable: false});
+
+    await app.inject({method: 'POST', url: '/api/settings/repositories', payload: {repository: 'kaicreator-mm/dac', syncNow: false}});
+    const refreshed = await app.inject({method: 'GET', url: '/api/discovery'});
+    expect(refreshed.json().repositories.find((r: {repository: string}) => r.repository === 'kaicreator-mm/dac').monitored).toBe(true);
+    await app.close();
+    store.close();
+  }, 20000);
+});

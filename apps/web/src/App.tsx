@@ -160,6 +160,18 @@ function DetailDrawer({item, onClose}: {item: WorkItemSnapshot | undefined; onCl
 
 const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(@[\w.-]+)?$/;
 
+interface DiscoveryRepository {
+  repository: string;
+  standardVersion?: string;
+  adopted: boolean;
+  monitorable: boolean;
+  monitored: boolean;
+  private: boolean;
+  fork: boolean;
+  updatedAt: string;
+}
+interface DiscoveryView { account?: string; scannedAt?: string; repositories: DiscoveryRepository[] }
+
 function SettingsDrawer({onClose, onChanged, onToast}: {onClose: () => void; onChanged: (settings: SettingsView) => void; onToast: (message: string, tone: 'good'|'bad') => void}) {
   const {lang, t} = useT();
   const [settings, setSettings] = useState<SettingsView>();
@@ -168,6 +180,8 @@ function SettingsDrawer({onClose, onChanged, onToast}: {onClose: () => void; onC
   const [repoError, setRepoError] = useState('');
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [discovery, setDiscovery] = useState<DiscoveryView>();
+  const [scanning, setScanning] = useState(false);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const load = useCallback(async () => {
@@ -228,6 +242,49 @@ function SettingsDrawer({onClose, onChanged, onToast}: {onClose: () => void; onC
     return <Badge value={t('syncStateError')} tone="bad" title={status.message} />;
   };
 
+  const scanAccount = async () => {
+    if (!settings?.githubTokenConfigured || scanning) return;
+    setScanning(true);
+    try { setDiscovery(await api<DiscoveryView>('/api/discovery/scan', {method: 'POST'})); }
+    catch (e) { onToast(e instanceof Error ? e.message : String(e), 'bad'); }
+    finally { setScanning(false); }
+  };
+
+  const monitorRepository = async (repository: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const next = await api<SettingsView>('/api/settings/repositories', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({repository})});
+      setSettings(next); onChanged(next);
+      setDiscovery(await api<DiscoveryView>('/api/discovery'));
+      onToast(t('syncQueued'), 'good');
+    } catch (e) { onToast(e instanceof Error ? e.message : String(e), 'bad'); }
+    finally { setBusy(false); }
+  };
+
+  const monitorAllSupported = async () => {
+    if (!discovery || busy) return;
+    const targets = discovery.repositories.filter((r) => r.monitorable && !r.monitored);
+    if (targets.length === 0) return;
+    setBusy(true);
+    try {
+      for (const target of targets) {
+        await api<SettingsView>('/api/settings/repositories', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({repository: target.repository, syncNow: false})});
+      }
+      const next = await api<SettingsView>('/api/sync', {method: 'POST'});
+      setSettings(next); onChanged(next);
+      setDiscovery(await api<DiscoveryView>('/api/discovery'));
+      onToast(t('syncQueued'), 'good');
+    } catch (e) { onToast(e instanceof Error ? e.message : String(e), 'bad'); }
+    finally { setBusy(false); }
+  };
+
+  const standardBadge = (repo: DiscoveryRepository) => {
+    if (repo.monitorable) return <Badge value={`${t('stdSupported')} · ${repo.standardVersion}`} tone="good" />;
+    if (repo.adopted) return <Badge value={`${t('stdUnsupported')} · ${repo.standardVersion}`} tone="warn" title={t('stdUnsupported')} />;
+    return <Badge value={t('stdNotAdopted')} tone="neutral" />;
+  };
+
   return <DrawerShell title={t('settings')} onClose={onClose}>
     <h2>{t('settings')}</h2>
     <div className="drawer-section"><h3>{t('githubConnection')}</h3>
@@ -255,6 +312,35 @@ function SettingsDrawer({onClose, onChanged, onToast}: {onClose: () => void; onC
       </div>
       {repoError && <small className="field-error" role="alert">{repoError}</small>}
       {settings?.demo && <small className="settings-help">{t('demoBadgeTitle')}</small>}
+    </div>
+    <div className="drawer-section"><h3>{t('accountRepos')}</h3>
+      <div className="settings-row">
+        <button onClick={()=>void scanAccount()} disabled={scanning || !settings?.githubTokenConfigured} title={!settings?.githubTokenConfigured ? t('needTokenFirst') : t('scanAccount')}>
+          {scanning ? t('scanning') : `🔍 ${t('scanAccount')}`}
+        </button>
+        {discovery && discovery.repositories.some((r) => r.monitorable && !r.monitored) &&
+          <button onClick={()=>void monitorAllSupported()} disabled={busy || scanning}>+ {t('monitorAllSupported')}</button>}
+      </div>
+      {discovery && <small className="settings-help">
+        {formatMessage(t('scanDoneHint'), {count: discovery.repositories.length, supported: discovery.repositories.filter((r) => r.monitorable).length})}
+        {discovery.scannedAt ? ` · ${t('scannedAt')}: ${new Date(discovery.scannedAt).toLocaleString(localeOf(lang))}` : ''}
+      </small>}
+      <ul className="repo-list discovery-list">
+        {(discovery?.repositories ?? []).map((repo) => <li key={repo.repository}>
+          <div className="repo-line">
+            <code>{repo.repository}</code>
+            {repo.private && <Badge value="private" />}
+            {repo.fork && <Badge value="fork" />}
+            {standardBadge(repo)}
+          </div>
+          {repo.monitored
+            ? <Badge value={t('monitoredChip')} tone="active" />
+            : repo.monitorable
+              ? <button onClick={()=>void monitorRepository(repo.repository)} disabled={busy || scanning}>{t('monitor')}</button>
+              : <span className="muted-dash">—</span>}
+        </li>)}
+      </ul>
+      {!settings?.githubTokenConfigured && <small className="settings-help">{t('needTokenFirst')}</small>}
     </div>
   </DrawerShell>;
 }

@@ -142,3 +142,31 @@ Status: ${dependsOn ? `WAITING_DEPENDENCY(${dependsOn})` : 'READY'}.`;
     expect(snapshot).toEqual(reduceRepositoryFacts(structuredClone(v34Facts)));
   });
 });
+
+describe('blocked-by markdown-list dependency variant', () => {
+  const listFacts: RepositoryFacts = {
+    repository: 'acme/sim', defaultBranch: 'main', defaultBranchSha: 'sha',
+    issues: [
+      { number: 12, id: 12, title: 'T-101 — scaffold', body: '### Dependencies\n\n- blocked by: none\n', state: 'closed', labels: [], assignees: [], htmlUrl: 'u', updatedAt: 'now' },
+      { number: 13, id: 13, title: 'T-102 — contracts', body: '### Dependencies\n\n- blocked by: T-101 (#12)\n', state: 'open', labels: [], assignees: [], htmlUrl: 'u', updatedAt: 'now' },
+      { number: 14, id: 14, title: 'T-103 — engine', body: '### Dependencies\n\n- blocked by: T-102\n', state: 'open', labels: [], assignees: [], htmlUrl: 'u', updatedAt: 'now' }
+    ],
+    dependencies: [], pullRequests: [], workflowRuns: [], comments: [], events: [], artifacts: [], collectedAt: 'now'
+  };
+
+  it('parses `- blocked by:` lists using issue refs directly and task ids via task keys', () => {
+    const snapshot = reduceRepositoryFacts(listFacts);
+    const t102 = snapshot.workItems.find((v) => v.taskId === 'T-102');
+    expect(t102?.blockedBy).toEqual([12]);
+    // #12 is closed, so the dependency is satisfied and T-102 is not blocked
+    expect(t102?.blockingDependencies).toEqual([]);
+    const t103 = snapshot.workItems.find((v) => v.taskId === 'T-103');
+    expect(t103?.blockedBy).toEqual([13]);
+    expect(snapshot.queues.blocked).toEqual([14]);
+  });
+
+  it('keeps none as no dependency', () => {
+    const snapshot = reduceRepositoryFacts(listFacts);
+    expect(snapshot.workItems.find((v) => v.taskId === 'T-101')?.blockedBy).toEqual([]);
+  });
+});
