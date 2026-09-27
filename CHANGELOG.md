@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- ai-development-standard v3.4-style project compatibility, from the domain-ai-creator trial (#18):
+  - `.dev-standard/VERSION` / `VERSION` artifacts now parse key=value pin blocks (`version=3.4.0`) instead of rendering the whole file.
+  - Structured `ai-dev:event:v2` blocks in issue bodies are parsed alongside comment events and attributed to their task, so gates recorded on dedicated review/validation issues attach to the matching implementation task.
+  - `depends_on_task_ids: [Txxx]` body fields resolve to issue numbers via task keys; native dependency entries merge with (rather than silence) body-derived edges; new `body-task-ids` provenance.
+  - One work item per task id: review/rereview issues are classified as evidence instead of phantom tasks, `T203R1` suffixes normalize to `T203`, and evidence-only tasks stay visible.
+  - Net effect on the trial repo: 41 → 29 work items, dependency edges 0 → 84, `ADS 3.4.0` rendered, blocked queue populated; the v4-style repo reduces 91 → 13 tasks with candidate/release states resolved.
 - Documentation: added Chinese translations for all docs under `docs/zh/`, a root `README.zh-CN.md`, and cross-language links. English remains canonical (#16).
 - UI runtime configuration, localization and UX pass (#14):
   - Settings drawer manages the GitHub token and repository list at runtime (`/api/settings`); env vars remain boot defaults. Token is memory-only, returned as a masked hint, never persisted.

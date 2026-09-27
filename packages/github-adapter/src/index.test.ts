@@ -26,6 +26,37 @@ describe('GitHubReadOnlyClient', () => {
     expect(calls.every((call) => call.method === 'GET')).toBe(true);
   });
 
+  it('parses key=value version pins and collects issue-body events with task ids', async () => {
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith('/repos/acme/proj')) return response({default_branch: 'main'});
+      if (url.includes('/branches/main')) return response({commit: {sha: 'abc'}});
+      if (url.includes('/issues?state=all')) return response([
+        {id: 1, number: 1, title: '[v0.1 T401] core', body: '<!-- ai-dev:event:v2 -->\nevent: IMPLEMENTATION_TASK\ntask_id: T401', state: 'open', labels: [], assignees: [], milestone: null, html_url: 'https://example/i1', updated_at: 'now'},
+        {id: 2, number: 2, title: '[v0.1 T401] Fresh Independent Review', body: 'PR: #7', state: 'open', labels: [], assignees: [], milestone: null, html_url: 'https://example/i2', updated_at: 'now'}
+      ]);
+      if (url.includes('/dependencies/blocked_by')) return response([], 404);
+      if (url.includes('/comments')) return response([
+        {id: 51, body: 'event: REVIEW_RESULT\nstatus: PASS\nhead_sha: sha-7', html_url: 'https://example/c51', created_at: 'now', updated_at: 'now', user: {login: 'reviewer'}}
+      ]);
+      if (url.includes('/pulls?state=all')) return response([]);
+      if (url.includes('/actions/runs')) return response({workflow_runs: []});
+      if (url.includes('/contents/VERSION')) return response({type: 'file', name: 'VERSION', path: 'VERSION', sha: 'v1', content: Buffer.from('0.1.0').toString('base64'), encoding: 'base64', html_url: null});
+      if (url.includes('/contents/.dev-standard/VERSION')) return response({type: 'file', name: 'VERSION', path: '.dev-standard/VERSION', sha: 'v2', content: Buffer.from('repository=acme/standard\nversion=3.4.0\nrevision=418d244f').toString('base64'), encoding: 'base64', html_url: null});
+      if (url.includes('/contents/')) return response({message: 'not found'}, 404);
+      throw new Error(`Unexpected URL ${url}`);
+    };
+    const facts = await new GitHubReadOnlyClient({fetchImpl}).collect('acme/proj');
+    expect(facts.standardVersion).toBe('3.4.0');
+    expect(facts.repositoryVersion).toBe('0.1.0');
+    const bodyEvent = facts.events.find((e) => e.event === 'IMPLEMENTATION_TASK');
+    expect(bodyEvent?.taskId).toBe('T401');
+    expect(bodyEvent?.source.kind).toBe('issue');
+    expect(bodyEvent?.source.ref).toBe('issue:#1');
+    const commentEvent = facts.events.find((e) => e.event === 'REVIEW_RESULT');
+    expect(commentEvent?.taskId).toBe('T401');
+  });
+
   it('collects per-issue facts with bounded concurrency', async () => {
     const issueNumbers = [1, 2, 3, 4, 5, 6, 7, 8];
     let inFlight = 0;

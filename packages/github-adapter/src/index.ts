@@ -1,8 +1,8 @@
 import type {
-  CommentFact, DependencyFact, IssueFact, PullRequestFact, RepositoryArtifactFact,
+  AgentEventFact, CommentFact, DependencyFact, IssueFact, PullRequestFact, RepositoryArtifactFact,
   RepositoryFacts, WorkflowRunFact
 } from '@ads-plane/contracts';
-import { parseAgentEvent } from '@ads-plane/reducer';
+import { parseAgentEvent, parseIssueBodyEvent, taskKeyOfIssue } from '@ads-plane/reducer';
 
 export interface GitHubReaderOptions {
   token?: string;
@@ -33,6 +33,18 @@ function decodeContent(payload: GitHubContent): string {
   if (!payload.content) return '';
   if (payload.encoding === 'base64') return Buffer.from(payload.content.replace(/\n/g, ''), 'base64').toString('utf8');
   return payload.content;
+}
+
+/**
+ * Version artifacts come in two shapes: a bare semver line (`4.0.0`) or a
+ * key=value pin block (`repository=...`\n`version=3.4.0`\n`revision=...`).
+ * Extract the `version=` value when present, otherwise use the whole content.
+ */
+function parseVersionContent(content: string): string | undefined {
+  const trimmed = content.trim();
+  if (!trimmed) return undefined;
+  const versionField = trimmed.match(/^\s*version\s*=\s*(\S+)/im)?.[1];
+  return versionField ?? trimmed;
 }
 
 async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -171,9 +183,22 @@ export class GitHubReadOnlyClient {
       if (payload && payload.type === 'file') artifacts.push({path, content: decodeContent(payload), sha: payload.sha, ...(payload.html_url ? {htmlUrl: payload.html_url} : {})});
     }
 
-    const events = comments.map(parseAgentEvent).filter((event): event is NonNullable<typeof event> => Boolean(event));
-    const repositoryVersion = artifacts.find((a) => a.path === 'VERSION')?.content.trim();
-    const standardVersion = artifacts.find((a) => a.path === '.dev-standard/VERSION')?.content.trim();
+    const taskKeyByIssue = new Map<number, string>();
+    const events: AgentEventFact[] = [];
+    for (const issue of issues) {
+      const taskKey = taskKeyOfIssue(issue);
+      if (taskKey) taskKeyByIssue.set(issue.number, taskKey);
+      const bodyEvent = parseIssueBodyEvent(issue);
+      if (bodyEvent) events.push(bodyEvent);
+    }
+    for (const comment of comments) {
+      const parsed = parseAgentEvent(comment);
+      if (!parsed) continue;
+      const taskId = taskKeyByIssue.get(comment.issueNumber);
+      events.push(taskId ? {...parsed, taskId} : parsed);
+    }
+    const repositoryVersion = parseVersionContent(artifacts.find((a) => a.path === 'VERSION')?.content ?? '');
+    const standardVersion = parseVersionContent(artifacts.find((a) => a.path === '.dev-standard/VERSION')?.content ?? '');
     return {
       repository,
       defaultBranch: repoFact.default_branch,

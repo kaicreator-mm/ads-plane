@@ -55,6 +55,8 @@ ADS Plane 不拥有工作流真相。VersionSnapshot 携带 `authorityNotice = N
 
 采集器优先使用 GitHub 原生 Issue Dependencies 的 `blocked_by` 端点。正文 `Depends On: #N` 解析只是原生依赖事实不可用时的能力回退。该回退会在溯源中显式标注。
 
+#18 之后的兼容规则：原生条目按 id 优先，但不会压制正文派生的依赖边（原生端点可能对仅在正文元数据中表达依赖的仓库返回 200 空集）。正文也可以携带 `depends_on_task_ids: [Txxx]`（ai-development-standard v3.4 风格），通过各 Issue 的 `task_id`/标题任务键解析为 Issue 编号，并在溯源中标注 `body-task-ids`。嵌入 Issue 正文的 `ai-dev:event:v2` 结构化块与评论事件一同解析，并按任务键归属到对应任务——因此记录在独立评审 Issue 上的评审/验证证据会挂接到匹配的实现任务，而不会产生幻影工作项。Issue 按角色分类（正文事件标记 → 实现；评审/验证标记或标题如 "Fresh Independent Review"/"Repository validation" → 证据）；每个任务 id 只产生一个工作项，仅有证据 Issue 的任务仍保持可见。
+
 ## 归约器规则
 
 - 显式的规范 `state:*` 元数据优先于启发式路由；

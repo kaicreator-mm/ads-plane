@@ -55,6 +55,8 @@ ADS Plane does not own workflow truth. The VersionSnapshot contains `authorityNo
 
 The collector prefers GitHub's native Issue Dependencies `blocked_by` endpoint. Body `Depends On: #N` parsing is a capability fallback only when native dependency facts are unavailable. The fallback is explicitly marked in provenance.
 
+Post-#18 compatibility: native entries take precedence per-id but never silence body-derived edges (the native endpoint can return an empty 200 set for repositories that express dependencies only in body metadata). Bodies may instead carry `depends_on_task_ids: [Txxx]` (ai-development-standard v3.4-style), resolved to issue numbers through each issue's `task_id`/title task key and marked `body-task-ids` in provenance. Structured `ai-dev:event:v2` blocks embedded in issue bodies are parsed alongside comment events and are attributed to their task via the task key, so review/validation evidence recorded on dedicated review issues attaches to the matching implementation task instead of creating phantom work items. Issues are classified by role (implementation via body event markers, evidence via review/validation markers or titles like "Fresh Independent Review"/"Repository validation"); each task id yields one work item, with evidence-only tasks still kept visible.
+
 ## Reducer rules
 
 - explicit canonical `state:*` metadata wins over heuristic routing;

@@ -41,7 +41,7 @@ export interface IssueFact {
 export interface DependencyFact {
   issueNumber: number;
   blockedBy: number[];
-  source: 'native' | 'body-fallback';
+  source: 'native' | 'body-fallback' | 'body-task-ids';
 }
 
 export interface PullRequestFact {
@@ -82,6 +82,7 @@ export interface AgentEventFact {
   event: string;
   issueNumber: number;
   commentId: number;
+  taskId?: string;
   actorRole?: string;
   operatorId?: string;
   dispatchId?: string;
