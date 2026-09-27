@@ -3,7 +3,15 @@ import { reduceRepositoryFacts } from '@ads-plane/reducer';
 import { SnapshotStore, type RepositoryConfig } from '@ads-plane/storage';
 
 export class ObserverService {
-  constructor(private readonly client: GitHubReadOnlyClient, private readonly store: SnapshotStore) {}
+  private client: GitHubReadOnlyClient;
+
+  constructor(client: GitHubReadOnlyClient, private readonly store: SnapshotStore) {
+    this.client = client;
+  }
+
+  setClient(client: GitHubReadOnlyClient): void { this.client = client; }
+
+  unregister(repository: string): void { this.store.unregister(repository); }
 
   register(config: RepositoryConfig): void { this.store.register(config); }
 

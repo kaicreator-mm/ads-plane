@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- UI runtime configuration, localization and UX pass (#14):
+  - Settings drawer manages the GitHub token and repository list at runtime (`/api/settings`); env vars remain boot defaults. Token is memory-only, returned as a masked hint, never persisted.
+  - Repository syncs run in the background with per-repo status (`syncing`/`ok`/`error`) instead of blocking HTTP requests.
+  - UI localized in English and Chinese with a header language toggle (persisted per browser); workflow/gate/candidate/dispatch states and all labels translate consistently; technical identifiers (`NON_AUTHORITATIVE_DERIVED_STATE`, issue numbers, SHAs) stay untranslated.
+  - UX conventions: dialog drawers with Esc/backdrop close and `role="dialog"`, two-step confirmation for repository removal, inline form validation, sync feedback toasts, demo-mode badge with sync disabled, locale-aware dates.
 - Hardening from the v0.0.1 real-browser validation (#11):
   - Fixed the default web dist resolution so `npm start -w @ads-plane/server` serves the UI regardless of working directory (#9 P2-1).
   - Fixed narrow-viewport header overflow; repository selector and Sync now wrap (#9 P2-2).

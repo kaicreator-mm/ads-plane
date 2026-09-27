@@ -14,7 +14,9 @@ The web UI renders React text values, not raw GitHub HTML. Do not add `dangerous
 
 ## Secrets
 
-Never persist GitHub tokens in SQLite snapshots. Runtime config is environment-only. Logs must not print Authorization headers.
+Never persist GitHub tokens in SQLite snapshots. Logs must not print Authorization headers.
+
+The runtime Settings API (`PUT /api/settings/github-token`) keeps the token in server memory only: it is never written to disk, never included in API responses (only a masked hint like `ghp_…abcd` is returned), and clearing it drops it immediately. The environment variable `ADS_GITHUB_TOKEN` remains a boot default only. Because the settings API is unauthenticated, run ADS Plane on a trusted host/port and do not expose it to untrusted networks — a caller with UI access can change which repositories are read (read-only GitHub scope) and can refresh the local projection, but cannot perform any GitHub write.
 
 ## Future write-enabled versions
 
