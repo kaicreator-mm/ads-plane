@@ -259,6 +259,54 @@ function SettingsDrawer({onClose, onChanged, onToast}: {onClose: () => void; onC
   </DrawerShell>;
 }
 
+function ProjectsOverview({projects, settings, busy, onOpen, onSync, onSyncAll, onOpenSettings}: {
+  projects: ProjectSummary[];
+  settings: SettingsView | undefined;
+  busy: boolean;
+  onOpen: (repository: string) => void;
+  onSync: (repository: string) => void;
+  onSyncAll: () => void;
+  onOpenSettings: () => void;
+}) {
+  const {lang, t} = useT();
+  if (projects.length === 0) {
+    return <main className="empty-state"><h1>{t('noProjects')}</h1><p>{t('noProjectsHint')}</p><button onClick={onOpenSettings}>⚙ {t('openSettings')}</button></main>;
+  }
+  const chip = (status: SyncStatusEntry | undefined) => {
+    if (!status) return null;
+    if (status.state === 'syncing') return <Badge value={t('syncStateSyncing')} tone="active" />;
+    if (status.state === 'ok') return <Badge value={t('syncStateOk')} tone="good" title={new Date(status.at).toLocaleString(localeOf(lang))} />;
+    return <Badge value={t('syncStateError')} tone="bad" title={status.message} />;
+  };
+  return <main className="content">
+    <section className="hero"><div><div className="eyebrow">{t('allProjects')} · {projects.length}</div><h1>{t('projectsOverview')}</h1></div>
+      <div className="release-badges"><button className="ghost" onClick={onSyncAll} disabled={busy || settings?.demo} title={settings?.demo ? t('syncDisabledDemo') : t('syncAll')}>⟳ {t('syncAll')}</button></div></section>
+    <section className="overview-grid">
+      {projects.map((p) => {
+        const [owner, repo] = p.repository.split('/');
+        return <article className="project-card" key={p.repository} onClick={() => onOpen(p.repository)}>
+          <div className="project-card-head"><code>{repo}</code><span className="project-owner">{owner}/</span>{chip(settings?.syncStatus?.[p.repository])}</div>
+          <div className="project-card-badges"><Badge value={`${t('candidateLabel')} ${enumLabels.candidate(lang, p.candidateState)}`} tone={stateTone(p.candidateState)} /><Badge value={`${t('releaseLabel')} ${enumLabels.candidate(lang, p.releaseState)}`} tone={stateTone(p.releaseState)} /></div>
+          <div className="lane-track project-track"><div className="lane-fill" style={{width: `${p.total ? Math.round((p.done / p.total) * 100) : 0}%`}} /></div>
+          <div className="project-card-metrics">
+            <span>{t('versionLabel')} <strong>{p.version}</strong></span>
+            <span>{t('progress')} <strong>{p.done}/{p.total}</strong></span>
+            <span>{t('running')} <strong>{p.running}</strong></span>
+            <span>{t('blocked')} <strong>{p.blocked}</strong></span>
+          </div>
+          <div className="project-card-foot">
+            <small>{t('lastSync')}: {new Date(p.generatedAt).toLocaleString(localeOf(lang))}</small>
+            <span className="project-card-actions">
+              <button className="ghost" onClick={(e) => { e.stopPropagation(); onSync(p.repository); }} disabled={busy || settings?.demo} title={settings?.demo ? t('syncDisabledDemo') : t('syncThis')}>⟳ {t('syncThis')}</button>
+              <button onClick={(e) => { e.stopPropagation(); onOpen(p.repository); }}>{t('openProject')} →</button>
+            </span>
+          </div>
+        </article>;
+      })}
+    </section>
+  </main>;
+}
+
 export function App() {
   const [lang, setLang] = useState<Lang>(detectLang);
   const t = useMemo(() => makeTranslator(lang), [lang]);
@@ -271,6 +319,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<SettingsView>();
   const [toast, setToast] = useState<{message: string; tone: 'good'|'bad'} | undefined>();
+  const userPicked = useRef(false);
 
   useEffect(() => {
     try { localStorage.setItem('ads-plane.lang', lang); } catch { /* ignore */ }
@@ -286,7 +335,13 @@ export function App() {
     try {
       const list = await api<ProjectSummary[]>('/api/projects');
       setProjects(list);
-      setSelectedRepo((current) => current && list.some((p) => p.repository === current) ? current : (list[0]?.repository ?? ''));
+      // '' means the all-projects overview. Keep a still-valid selection; otherwise
+      // land directly on the only project when there is exactly one.
+      setSelectedRepo((current) => {
+        if (current && list.some((p) => p.repository === current)) return current;
+        if (!userPicked.current && list.length === 1) return list[0]!.repository;
+        return '';
+      });
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }, []);
 
@@ -324,14 +379,24 @@ export function App() {
     return () => clearInterval(timer);
   }, [syncing, loadProjects, loadSnapshot, selectedRepo]);
 
-  const sync = async () => {
-    if (!selectedRepo) return;
-    const [owner, repo] = selectedRepo.split('/'); if (!owner || !repo) return;
+  const syncRepo = async (repository: string) => {
+    if (!repository) return;
+    const [owner, repo] = repository.split('/'); if (!owner || !repo) return;
     setLoading(true); setError('');
     try {
       await api<SettingsView>(`/api/projects/${owner}/${repo}/sync`, {method: 'POST'});
       showToast(t('syncQueued'), 'good');
       setSettings(await api<SettingsView>('/api/settings'));
+    }
+    catch (e) { showToast(e instanceof Error ? e.message : String(e), 'bad'); }
+    finally { setLoading(false); }
+  };
+
+  const syncAll = async () => {
+    setLoading(true); setError('');
+    try {
+      setSettings(await api<SettingsView>('/api/sync', {method: 'POST'}));
+      showToast(t('syncQueued'), 'good');
     }
     catch (e) { showToast(e instanceof Error ? e.message : String(e), 'bad'); }
     finally { setLoading(false); }
@@ -354,18 +419,19 @@ export function App() {
             <button aria-pressed={lang === 'en'} className={lang === 'en' ? 'on' : ''} onClick={()=>setLang('en')}>EN</button>
             <button aria-pressed={lang === 'zh'} className={lang === 'zh' ? 'on' : ''} onClick={()=>setLang('zh')}>中文</button>
           </div>
-          <select aria-label={t('repositoriesSection')} value={selectedRepo} onChange={(e)=>setSelectedRepo(e.target.value)}>
-            {projects.map((p)=><option key={p.repository}>{p.repository}</option>)}
+          <select aria-label={t('repositoriesSection')} value={selectedRepo} onChange={(e)=>{userPicked.current = true; setSelectedRepo(e.target.value);}}>
+            <option value="">{t('allProjects')}</option>
+            {projects.map((p)=><option key={p.repository} value={p.repository}>{p.repository}</option>)}
           </select>
           {demoMode && <Badge value={t('demoBadge')} tone="warn" title={t('demoBadgeTitle')} />}
-          <button onClick={()=>void sync()} disabled={!selectedRepo || loading || demoMode} title={demoMode ? t('syncDisabledDemo') : t('sync')}>{loading ? t('syncing') : t('sync')}</button>
+          <button onClick={()=>void syncRepo(selectedRepo)} disabled={!selectedRepo || loading || demoMode} title={demoMode ? t('syncDisabledDemo') : t('sync')}>{loading ? t('syncing') : t('sync')}</button>
           <button className="ghost" onClick={()=>setSettingsOpen(true)} aria-label={t('openSettings')}>⚙ {t('settings')}</button>
         </div>
       </header>
       <div className="authority-banner"><strong>NON_AUTHORITATIVE_DERIVED_STATE</strong><span>{t('authorityExplain')}</span></div>
       {error && <div className="error-banner" role="alert">{error}</div>}
       {toast && <div className={`toast toast-${toast.tone}`} role="status">{toast.message}</div>}
-      {!snapshot ? <main className="empty-state"><h1>{loading ? t('reducing') : t('noSnapshot')}</h1><p>{t('noSnapshotHint')}</p><button onClick={()=>setSettingsOpen(true)}>⚙ {t('openSettings')}</button></main> : <main className="content">
+      {selectedRepo === '' ? <ProjectsOverview projects={projects} settings={settings} busy={loading} onOpen={setSelectedRepo} onSync={(repository)=>void syncRepo(repository)} onSyncAll={()=>void syncAll()} onOpenSettings={()=>setSettingsOpen(true)} /> : !snapshot ? <main className="empty-state"><h1>{loading ? t('reducing') : t('noSnapshot')}</h1><p>{t('noSnapshotHint')}</p><button onClick={()=>setSettingsOpen(true)}>⚙ {t('openSettings')}</button></main> : <main className="content">
         <section className="hero"><div><div className="eyebrow">{snapshot.repository}</div><h1>{t('versionObserver')}</h1><p>{subtitle}</p></div><div className="release-badges"><Badge value={`${t('candidateLabel')} ${enumLabels.candidate(lang, snapshot.candidateState)}`} tone={stateTone(snapshot.candidateState)} /><Badge value={`${t('releaseLabel')} ${enumLabels.candidate(lang, snapshot.releaseState)}`} tone={stateTone(snapshot.releaseState)} /></div></section>
         <section className="metrics"><Metric label={t('progress')} value={`${snapshot.progress.percent}%`} hint={formatMessage(t('doneHint'), {done: snapshot.progress.done, total: snapshot.progress.total})} /><Metric label={t('running')} value={snapshot.progress.running} /><Metric label={t('ready')} value={snapshot.progress.ready} /><Metric label={t('blocked')} value={snapshot.progress.blocked} /><Metric label={t('mergeReady')} value={snapshot.progress.mergeReady} /></section>
         <section className="two-col"><LaneSummary snapshot={snapshot} /><QueuePanel snapshot={snapshot} /></section>

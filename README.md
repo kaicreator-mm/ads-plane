@@ -88,6 +88,10 @@ ADS_REPOSITORIES='owner/project-a@v1.2,owner/project-b@v0.4' npm start -w @ads-p
 
 The UI is localized in English and Chinese; switch languages with the `EN / 中文` toggle in the header (the choice is remembered per browser).
 
+## Multi-project monitoring
+
+Register any number of repositories (env list at boot, or Settings at runtime) and optionally set `ADS_SYNC_INTERVAL_SECONDS` for periodic reconciliation of all of them. The **All projects** entry in the repository selector (default landing when more than one repository is configured) shows a monitoring overview: per-project progress, candidate/release state, sync status and last sync time, with per-repository sync, sync-all, and one-click navigation into each project.
+
 ## Development
 
 ```bash
